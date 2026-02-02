@@ -126,7 +126,7 @@ export const useGameState = () => {
     setGameState(prev => {
       const newHP = Math.max(0, Math.min(prev.maxHP, prev.currentHP + amount));
       if (newHP === 0) {
-        console.log('💀 You have been defeated! HP restored to 50.');
+        console.log(`💀 You have been defeated! HP restored to ${prev.maxHP}.`);
         // In Habitica, losing all HP doesn't end the game but has consequences
         return {
           ...prev,

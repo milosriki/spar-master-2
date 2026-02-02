@@ -22,6 +22,10 @@ import { HabitDialog } from './HabitDialog';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
+// Constants for rewards and penalties
+const GOLD_TO_XP_RATIO = 0.5; // Gold earned = XP * 0.5
+const DEFAULT_DAILY_HP_DAMAGE = 5; // HP damage for missed dailies
+
 interface EnhancedHabitTrackerProps {
   onHabitComplete: (habitId: string, xp: number, gold: number) => void;
   onHabitMissed?: (habitId: string, hpDamage: number) => void;
@@ -354,10 +358,10 @@ export function EnhancedHabitTracker({ onHabitComplete, onHabitMissed }: Enhance
             setHabits(prev => [...prev, { 
               ...habit, 
               id: Date.now().toString(),
-              goldReward: habit.xpValue / 2, // Auto-calculate gold based on XP
+              goldReward: Math.floor(habit.xpValue * GOLD_TO_XP_RATIO),
               taskValue: 0,
               taskColor: 'yellow',
-              hpDamage: habit.type === 'daily' ? 5 : undefined
+              hpDamage: habit.type === 'daily' ? DEFAULT_DAILY_HP_DAMAGE : undefined
             }]);
           }
           setDialogOpen(false);

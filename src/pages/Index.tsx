@@ -27,8 +27,12 @@ import { AIChat } from '@/components/ai/AIChat';
 import { ChallengeCard } from '@/components/challenges/ChallengeCard';
 import { Leaderboard } from '@/components/leaderboard/Leaderboard';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
+import { EnhancedDashboardStats } from '@/components/dashboard/EnhancedDashboardStats';
+import { CharacterStats } from '@/components/character/CharacterStats';
+import { RewardsShop } from '@/components/character/RewardsShop';
 import { ProgressRoadmap } from '@/components/progress/ProgressRoadmap';
 import { HabitTracker } from '@/components/habits/HabitTracker';
+import { EnhancedHabitTracker } from '@/components/habits/EnhancedHabitTracker';
 import { RecoveryDashboard } from '@/components/performance/RecoveryDashboard';
 import { TrainingCalendar } from '@/components/performance/TrainingCalendar';
 import { PerformanceAnalytics } from '@/components/performance/PerformanceAnalytics';
@@ -112,7 +116,11 @@ const Index = () => {
     isStreakAtRisk, 
     logWorkout, 
     logDailyCheckIn,
-    addXP
+    addXP,
+    updateHP,
+    addGold,
+    spendGold,
+    addGems
   } = useGameState();
   const [selectedTab, setSelectedTab] = useState('dashboard');
   const [chatMessages, setChatMessages] = useState<AIMessage[]>([]);
@@ -247,10 +255,31 @@ const Index = () => {
     return accepted ?? challenges[0];
   }, [acceptedChallengeIds, challenges]);
 
-  const handleHabitComplete = (habitId: string, xp: number) => {
-    console.log(`Habit ${habitId} completed! Earned ${xp} XP`);
+  const handleHabitComplete = (habitId: string, xp: number, gold: number = 0) => {
+    console.log(`Habit ${habitId} completed! Earned ${xp} XP and ${gold} gold`);
     addXP(xp, 'habit_completed');
+    if (gold > 0) {
+      addGold(gold);
+    }
     incrementChallengeProgress('workout', 1);
+  };
+
+  const handleHabitMissed = (habitId: string, hpDamage: number) => {
+    console.log(`Habit ${habitId} missed! Lost ${hpDamage} HP`);
+    updateHP(-hpDamage);
+  };
+
+  const handlePurchase = (item: any, cost: number, currency: 'gold' | 'gems') => {
+    if (currency === 'gold' && gameState.gold >= cost) {
+      spendGold(cost);
+      console.log(`Purchased ${item.name} for ${cost} gold`);
+      // TODO: Add item to inventory
+    } else if (currency === 'gems' && gameState.gems >= cost) {
+      // TODO: Implement gem spending
+      console.log(`Purchased ${item.name} for ${cost} gems`);
+    } else {
+      console.log('Not enough currency!');
+    }
   };
 
   return (
@@ -319,16 +348,31 @@ const Index = () => {
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
             {/* Quick Stats */}
-            <DashboardStats stats={{
-              workoutsCompleted: gameState.workoutsCompleted,
-              challengesCompleted: gameState.challengesCompleted,
-              totalXP: gameState.totalXP,
-              currentStreak: gameState.currentStreak
-            }} />
+            <EnhancedDashboardStats 
+              stats={{
+                workoutsCompleted: gameState.workoutsCompleted,
+                challengesCompleted: gameState.challengesCompleted,
+                totalXP: gameState.totalXP,
+                currentStreak: gameState.currentStreak
+              }}
+              habitStats={{
+                totalTasks: 12,
+                habitsCount: 5,
+                dailiesCount: 4,
+                todosCount: 3,
+                completedToday: 7,
+                missedToday: 2,
+                totalGoldEarned: 45,
+                totalXPEarned: 150
+              }}
+            />
 
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Left Column - Gamification */}
               <div className="lg:col-span-2 space-y-6">
+                {/* Character Stats */}
+                <CharacterStats gameState={gameState} />
+                
                 {/* Energy and XP */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <Card className="shadow-card">
@@ -454,7 +498,17 @@ const Index = () => {
 
           {/* Habits Tab */}
           <TabsContent value="habits" className="space-y-6">
-            <HabitTracker onHabitComplete={handleHabitComplete} />
+            <EnhancedHabitTracker 
+              onHabitComplete={handleHabitComplete} 
+              onHabitMissed={handleHabitMissed}
+            />
+            
+            {/* Rewards Shop */}
+            <RewardsShop 
+              gold={gameState.gold}
+              gems={gameState.gems}
+              onPurchase={handlePurchase}
+            />
           </TabsContent>
 
           {/* Performance Tab */}

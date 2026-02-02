@@ -70,7 +70,11 @@ async function decodeAudioData(
   return buffer;
 }
 
-const AiAudit: React.FC = () => {
+interface AiAuditProps {
+  onBookingRequest?: () => void;
+}
+
+const AiAudit: React.FC<AiAuditProps> = ({ onBookingRequest }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'chat'>('overview');
   const [handshakePhase, setHandshakePhase] = useState<string>(''); 
 
@@ -250,6 +254,22 @@ const AiAudit: React.FC = () => {
     }));
 
     const responseText = await executeCommand(commandText);
+
+    // Check if AI wants to trigger booking
+    if (responseText.startsWith('[BOOKING_REQUEST]')) {
+      const bookingData = JSON.parse(responseText.substring('[BOOKING_REQUEST]'.length));
+      setCli(prev => ({
+          ...prev,
+          loading: false,
+          output: [...prev.output, { type: 'ai', content: 'Great! Let me help you schedule a consultation. Opening the booking system...' }]
+      }));
+      
+      // Trigger booking modal
+      if (onBookingRequest) {
+        setTimeout(() => onBookingRequest(), 500);
+      }
+      return;
+    }
 
     setCli(prev => ({
         ...prev,

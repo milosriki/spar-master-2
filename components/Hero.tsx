@@ -2,9 +2,21 @@ import React from 'react';
 import Button from './Button';
 import { CheckCircle2, TrendingUp } from 'lucide-react';
 
-const Hero: React.FC = () => {
+interface HeroProps {
+  onBookingClick?: () => void;
+}
+
+const Hero: React.FC<HeroProps> = ({ onBookingClick }) => {
   const scrollToAudit = () => {
     document.getElementById('audit')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleCTAClick = () => {
+    if (onBookingClick) {
+      onBookingClick();
+    } else {
+      scrollToAudit();
+    }
   };
 
   return (
@@ -30,7 +42,7 @@ const Hero: React.FC = () => {
 
         {/* Action Chunk */}
         <div className="flex flex-col gap-4 mb-10">
-          <Button onClick={scrollToAudit} size="xl" fullWidth className="md:w-auto shadow-orange-500/20">
+          <Button onClick={handleCTAClick} size="xl" fullWidth className="md:w-auto shadow-orange-500/20">
             Start Your Transformation
           </Button>
           <p className="text-base text-gray-500 italic text-center md:text-left mt-2">

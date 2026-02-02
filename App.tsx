@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Hero from './components/Hero';
 import ValueProps from './components/ValueProps';
 import AiAudit from './components/AiAudit';
@@ -6,19 +6,27 @@ import Testimonials from './components/Testimonials';
 import Footer from './components/Footer';
 import Button from './components/Button';
 import Section from './components/Section';
+import BookingModal from './components/BookingModal';
+import LeadCaptureForm from './components/LeadCaptureForm';
 
 function App() {
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+
   const handleBooking = () => {
+    setBookingModalOpen(true);
+  };
+
+  const handleExternalBooking = () => {
     window.location.href = 'https://tinyurl.com/bookptd';
   };
 
   return (
     <div className="min-h-screen bg-background text-primary selection:bg-accent selection:text-white">
-      <Hero />
+      <Hero onBookingClick={handleBooking} />
       <ValueProps />
       
       {/* Layer-Cake Logic: Break the reading pattern with the interactive element */}
-      <AiAudit />
+      <AiAudit onBookingRequest={handleBooking} />
       
       <Section id="method" className="py-12">
         <h2 className="text-3xl font-black mb-8">The Protocol</h2>
@@ -36,6 +44,14 @@ function App() {
       </Section>
 
       <Testimonials />
+      
+      {/* Lead Capture Section */}
+      <Section id="contact" className="py-12 bg-gray-50">
+        <LeadCaptureForm 
+          source="main-page"
+          onSuccess={() => setBookingModalOpen(true)}
+        />
+      </Section>
       
       {/* Final CTA Section - Sticky Concept Logic (though placed at bottom, it's the final catch) */}
       <Section id="apply" className="bg-white border-t border-gray-200">
@@ -63,6 +79,12 @@ function App() {
             Apply Now
         </Button>
       </div>
+
+      {/* Booking Modal */}
+      <BookingModal 
+        isOpen={bookingModalOpen}
+        onClose={() => setBookingModalOpen(false)}
+      />
     </div>
   );
 }

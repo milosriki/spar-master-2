@@ -20,6 +20,14 @@ export interface GameState {
   dailyXP: number;
   weeklyXP: number;
   
+  // Habitica-inspired Health System
+  currentHP: number;
+  maxHP: number;
+  
+  // Habitica-inspired Currency System
+  gold: number;
+  gems: number;
+  
   // Energy System
   currentEnergy: number;
   maxEnergy: number;
@@ -41,6 +49,13 @@ export interface GameState {
   rank: number;
   leaderboardPosition: number;
   friendsCount: number;
+  
+  // Character/Avatar System (Habitica-inspired)
+  characterClass?: 'warrior' | 'mage' | 'healer' | 'rogue';
+  equippedItems: EquippedItems;
+  inventory: InventoryItem[];
+  pets: Pet[];
+  mounts: Mount[];
 }
 
 export interface Achievement {
@@ -155,4 +170,78 @@ export interface UserBehaviorData {
   engagementScore: number;
   conversionFunnelStage: string;
   lastPaywallShown?: Date;
+}
+
+// Habitica-inspired Character & Equipment System
+
+export interface EquippedItems {
+  weapon?: string;
+  armor?: string;
+  head?: string;
+  shield?: string;
+  pet?: string;
+  mount?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  type: 'weapon' | 'armor' | 'head' | 'shield' | 'potion' | 'food' | 'quest';
+  description: string;
+  goldCost: number;
+  gemCost?: number;
+  stats?: {
+    strength?: number;
+    intelligence?: number;
+    constitution?: number;
+    perception?: number;
+  };
+  icon: string;
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  quantity: number;
+}
+
+export interface Pet {
+  id: string;
+  name: string;
+  species: string;
+  color: string;
+  icon: string;
+  feedProgress: number;
+  isMount: boolean;
+}
+
+export interface Mount {
+  id: string;
+  name: string;
+  species: string;
+  color: string;
+  icon: string;
+}
+
+export interface Reward {
+  id: string;
+  name: string;
+  description: string;
+  goldCost: number;
+  type: 'custom' | 'game';
+  icon: string;
+  createdAt: Date;
+}
+
+export interface TaskColor {
+  color: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+  value: number;
+  description: string;
+}
+
+export interface HabitStats {
+  totalTasks: number;
+  habitsCount: number;
+  dailiesCount: number;
+  todosCount: number;
+  completedToday: number;
+  missedToday: number;
+  totalGoldEarned: number;
+  totalXPEarned: number;
 }

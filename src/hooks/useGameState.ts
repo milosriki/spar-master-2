@@ -8,6 +8,12 @@ const INITIAL_GAME_STATE: GameState = {
   xpToNextLevel: 350,
   dailyXP: 85,
   weeklyXP: 420,
+  // Habitica-inspired Health System
+  currentHP: 45,
+  maxHP: 50,
+  // Habitica-inspired Currency System
+  gold: 150,
+  gems: 5,
   currentEnergy: 7,
   maxEnergy: 10,
   lastEnergyRefill: new Date(),
@@ -21,7 +27,13 @@ const INITIAL_GAME_STATE: GameState = {
   achievementsUnlocked: ['first_week', 'energy_master', 'streak_warrior'],
   rank: 15,
   leaderboardPosition: 15,
-  friendsCount: 8
+  friendsCount: 8,
+  // Character/Avatar System
+  characterClass: 'warrior',
+  equippedItems: {},
+  inventory: [],
+  pets: [],
+  mounts: []
 };
 
 const STORAGE_KEY = 'sparkMasteryGameState';
@@ -106,6 +118,51 @@ export const useGameState = () => {
     setGameState(prev => ({
       ...prev,
       currentEnergy: Math.max(0, Math.min(prev.maxEnergy, prev.currentEnergy + amount))
+    }));
+  }, []);
+
+  // Update HP (Habitica-style damage for missed tasks)
+  const updateHP = useCallback((amount: number) => {
+    setGameState(prev => {
+      const newHP = Math.max(0, Math.min(prev.maxHP, prev.currentHP + amount));
+      if (newHP === 0) {
+        console.log('💀 You have been defeated! HP restored to 50.');
+        // In Habitica, losing all HP doesn't end the game but has consequences
+        return {
+          ...prev,
+          currentHP: prev.maxHP,
+          gold: Math.floor(prev.gold * 0.5), // Lose half your gold
+          level: Math.max(1, prev.level - 1) // Lose a level
+        };
+      }
+      return {
+        ...prev,
+        currentHP: newHP
+      };
+    });
+  }, []);
+
+  // Add gold (Habitica-style currency)
+  const addGold = useCallback((amount: number) => {
+    setGameState(prev => ({
+      ...prev,
+      gold: prev.gold + amount
+    }));
+  }, []);
+
+  // Spend gold
+  const spendGold = useCallback((amount: number) => {
+    setGameState(prev => ({
+      ...prev,
+      gold: Math.max(0, prev.gold - amount)
+    }));
+  }, []);
+
+  // Add gems
+  const addGems = useCallback((amount: number) => {
+    setGameState(prev => ({
+      ...prev,
+      gems: prev.gems + amount
     }));
   }, []);
 
@@ -194,6 +251,10 @@ export const useGameState = () => {
     isLoading,
     addXP,
     updateEnergy,
+    updateHP,
+    addGold,
+    spendGold,
+    addGems,
     completeChallenge,
     completeMicroWin,
     updateStreak,

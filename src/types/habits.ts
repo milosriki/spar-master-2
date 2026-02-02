@@ -37,6 +37,13 @@ export interface Habit {
   category?: 'fitness' | 'wellness' | 'work' | 'social' | 'personal';
   xpValue: number;
   energyCost: number;
+  
+  // Habitica-inspired features
+  goldReward: number;
+  taskColor?: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+  taskValue: number; // Internal value that affects color
+  hpDamage?: number; // For missed dailies or negative habits
+  isCompleteToday?: boolean; // For daily tracking
 }
 
 export interface ChecklistItem {

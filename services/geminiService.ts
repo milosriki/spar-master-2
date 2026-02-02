@@ -1,5 +1,7 @@
 import { GoogleGenAI, FunctionDeclaration, Type, FunctionCallingConfigMode, Modality, LiveServerMessage } from "@google/genai";
 import { AuditGoal } from "../types";
+import { createLead } from "./leadService";
+import { getAvailableSlots } from "./bookingService";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
@@ -130,6 +132,53 @@ export class LiveSessionController {
 
 // --- EXISTING TOOLS ---
 
+// Booking and lead generation tools
+const bookConsultationTool: FunctionDeclaration = {
+  name: "book_consultation",
+  description: "Books a consultation appointment for the user when they express interest in scheduling a session or meeting.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      name: {
+        type: Type.STRING,
+        description: "The user's full name"
+      },
+      email: {
+        type: Type.STRING,
+        description: "The user's email address"
+      },
+      goal: {
+        type: Type.STRING,
+        description: "The user's primary fitness/health goal"
+      }
+    },
+    required: ["name", "email"]
+  }
+};
+
+const captureLeadTool: FunctionDeclaration = {
+  name: "capture_lead",
+  description: "Captures lead information when a user shows interest but isn't ready to book. Use this to save their details for follow-up.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      name: {
+        type: Type.STRING,
+        description: "The user's name"
+      },
+      email: {
+        type: Type.STRING,
+        description: "The user's email address"
+      },
+      interest: {
+        type: Type.STRING,
+        description: "What they're interested in (energy, physique, longevity, etc.)"
+      }
+    },
+    required: ["name", "email", "interest"]
+  }
+};
+
 const handshakeTool: FunctionDeclaration = {
   name: "handshake",
   description: "Initiates a secure handshake protocol with the client application to verify connection.",
@@ -193,23 +242,49 @@ const executeCommand = async (command: string): Promise<string> => {
     if (!apiKey) throw new Error("API Key not found");
     
     const prompt = `
-      You are the **Antigravity Habit Agent**.
-      Goal: Build trust via "Micro-Wins".
+      You are the **Antigravity Habit Agent** with booking and lead generation capabilities.
+      Goal: Build trust via "Micro-Wins" and guide users to book consultations.
       User Input: "${command}"
       
       Response Protocol:
-      1. Validate.
-      2. Provide immediate specific protocol (Micro-Win).
-      3. Hook to paid service (Spark Protocol).
+      1. Validate and provide immediate specific protocol (Micro-Win).
+      2. If user shows interest in booking or wants to learn more, offer to help them schedule a consultation.
+      3. If user provides their contact info, capture it as a lead for follow-up.
+      4. Hook to paid service (Spark Protocol).
       
-      Keep it executive, precision-focused.
+      Keep it executive, precision-focused. When users express interest in booking, scheduling, or want personalized help, suggest using the booking system.
     `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { maxOutputTokens: 600 }
+      config: { 
+        maxOutputTokens: 600,
+        tools: [{ functionDeclarations: [bookConsultationTool, captureLeadTool] }],
+        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } }
+      }
     });
+
+    // Check if AI wants to call a function
+    const functionCall = response.candidates?.[0]?.content?.parts?.[0]?.functionCall;
+    if (functionCall) {
+      const args = functionCall.args as any;
+      
+      if (functionCall.name === 'book_consultation') {
+        // Return a special message that the UI can intercept to open booking modal
+        return `[BOOKING_REQUEST]${JSON.stringify(args)}`;
+      } else if (functionCall.name === 'capture_lead') {
+        // Capture the lead
+        await createLead({
+          name: args.name,
+          email: args.email,
+          goal: args.interest,
+          source: 'ai-chat',
+        });
+        return "Great! I've saved your information. Our team will reach out shortly. In the meantime, would you like to schedule a consultation?";
+      }
+    }
+
     return response.text || "Computing optimal path...";
   } catch (error) {
     return "Connection interrupted. Re-establishing link...";

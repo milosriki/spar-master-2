@@ -1,0 +1,7 @@
+{
+  "name": "Spark Mastery",
+  "description": "High-conversion landing page for executive personal training tailored for men 40+ in Dubai.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

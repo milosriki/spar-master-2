@@ -26,6 +26,7 @@ const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
   });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -38,11 +39,12 @@ const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
     e.preventDefault();
     
     if (!formData.name || !formData.email) {
-      alert('Please fill in at least your name and email');
+      setError('Please fill in at least your name and email');
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
       const lead = await createLead({
         name: formData.name,
@@ -73,7 +75,7 @@ const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
       }, 3000);
     } catch (error) {
       console.error('Failed to submit lead:', error);
-      alert('Failed to submit. Please try again.');
+      setError('Failed to submit. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -95,6 +97,11 @@ const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
   if (compact) {
     return (
       <form onSubmit={handleSubmit} className="space-y-3">
+        {error && (
+          <div className="p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
+            {error}
+          </div>
+        )}
         <div className="flex gap-2">
           <input
             type="text"
@@ -125,6 +132,12 @@ const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 bg-white rounded-lg border border-gray-200 p-6">
       <h3 className="text-xl font-bold mb-4">Get Your Free Consultation</h3>
+      
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          {error}
+        </div>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>

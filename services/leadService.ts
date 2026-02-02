@@ -127,7 +127,7 @@ export const getLeadByEmail = (email: string): Lead | null => {
 /**
  * Track lead events (placeholder for analytics)
  */
-const trackLeadEvent = (event: string, data: any) => {
+const trackLeadEvent = (event: string, data: Lead) => {
   console.log(`[Lead Event] ${event}:`, data);
   // In production, integrate with analytics service
 };

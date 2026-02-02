@@ -13,6 +13,7 @@ interface BookingModalProps {
 const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledData }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<BookingSlot[]>([]);
   const [formData, setFormData] = useState<Partial<BookingData>>({
     name: prefilledData?.name || '',
@@ -51,11 +52,12 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledD
 
   const handleSubmit = async () => {
     if (!formData.name || !formData.email || !selectedDate || !selectedTime) {
-      alert('Please fill in all required fields');
+      setError('Please fill in all required fields');
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
       // Create lead first
       await createLead({
@@ -79,17 +81,16 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledD
       });
 
       if (result.success) {
-        alert('Booking request submitted! Redirecting to confirmation...');
         if (result.confirmationUrl) {
           window.location.href = result.confirmationUrl;
         }
         onClose();
       } else {
-        alert(result.message);
+        setError(result.message);
       }
     } catch (error) {
       console.error('Booking error:', error);
-      alert('Failed to create booking. Please try again.');
+      setError('Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -127,6 +128,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledD
 
         {/* Content */}
         <div className="p-6">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Step 1: Personal Information */}
           {step === 1 && (
             <div className="space-y-4">
@@ -234,7 +242,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledD
                               : 'border-gray-300 hover:border-gray-400'
                           }`}
                         >
-                          {new Date(date).toLocaleDateString('en-US', {
+                          {new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
                             weekday: 'short',
                             month: 'short',
                             day: 'numeric'
@@ -312,7 +320,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledD
                 <div className="flex justify-between">
                   <span className="text-gray-600">Date:</span>
                   <span className="font-medium">
-                    {new Date(selectedDate).toLocaleDateString('en-US', {
+                    {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',

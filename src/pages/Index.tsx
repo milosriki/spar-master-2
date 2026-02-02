@@ -14,7 +14,9 @@ import {
   Crown,
   Menu,
   Sparkles,
-  Map
+  Map,
+  Activity,
+  ListChecks
 } from 'lucide-react';
 
 // Components
@@ -26,6 +28,10 @@ import { ChallengeCard } from '@/components/challenges/ChallengeCard';
 import { Leaderboard } from '@/components/leaderboard/Leaderboard';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
 import { ProgressRoadmap } from '@/components/progress/ProgressRoadmap';
+import { HabitTracker } from '@/components/habits/HabitTracker';
+import { RecoveryDashboard } from '@/components/performance/RecoveryDashboard';
+import { TrainingCalendar } from '@/components/performance/TrainingCalendar';
+import { PerformanceAnalytics } from '@/components/performance/PerformanceAnalytics';
 
 // Hooks
 import { useGameState } from '@/hooks/useGameState';
@@ -105,7 +111,8 @@ const Index = () => {
     completeMicroWin, 
     isStreakAtRisk, 
     logWorkout, 
-    logDailyCheckIn 
+    logDailyCheckIn,
+    addXP
   } = useGameState();
   const [selectedTab, setSelectedTab] = useState('dashboard');
   const [chatMessages, setChatMessages] = useState<AIMessage[]>([]);
@@ -240,6 +247,12 @@ const Index = () => {
     return accepted ?? challenges[0];
   }, [acceptedChallengeIds, challenges]);
 
+  const handleHabitComplete = (habitId: string, xp: number) => {
+    console.log(`Habit ${habitId} completed! Earned ${xp} XP`);
+    addXP(xp, 'habit_completed');
+    incrementChallengeProgress('workout', 1);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto p-4 space-y-6">
@@ -268,10 +281,18 @@ const Index = () => {
 
         {/* Navigation Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="dashboard" className="gap-2">
               <Home className="h-4 w-4" />
               <span className="hidden sm:inline">Dashboard</span>
+            </TabsTrigger>
+            <TabsTrigger value="habits" className="gap-2">
+              <ListChecks className="h-4 w-4" />
+              <span className="hidden sm:inline">Habits</span>
+            </TabsTrigger>
+            <TabsTrigger value="performance" className="gap-2">
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Performance</span>
             </TabsTrigger>
             <TabsTrigger value="progress" className="gap-2">
               <Map className="h-4 w-4" />
@@ -429,6 +450,18 @@ const Index = () => {
               gameState={gameState}
               onStartMilestone={handleStartMilestone}
             />
+          </TabsContent>
+
+          {/* Habits Tab */}
+          <TabsContent value="habits" className="space-y-6">
+            <HabitTracker onHabitComplete={handleHabitComplete} />
+          </TabsContent>
+
+          {/* Performance Tab */}
+          <TabsContent value="performance" className="space-y-6">
+            <RecoveryDashboard />
+            <TrainingCalendar />
+            <PerformanceAnalytics />
           </TabsContent>
 
           {/* AI Coach Tab */}

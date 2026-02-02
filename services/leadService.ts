@@ -141,7 +141,7 @@ export const qualifyLeadFromConversation = (
     userInfo: Partial<LeadInput>;
   }
 ): number => {
-  let score = calculateLeadScore(userInfo as LeadInput);
+  let score = calculateLeadScore(conversationData.userInfo as LeadInput);
   
   // Analyze conversation for engagement indicators
   const messageCount = conversationData.messages.length;

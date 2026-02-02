@@ -95,8 +95,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, prefilledD
     }
   };
 
-  const getUniqueDates = () => {
-    const dates = [...new Set(availableSlots.map(slot => slot.date))];
+  const getUniqueDates = (): string[] => {
+    const dates = [...new Set(availableSlots.map(slot => slot.date))] as string[];
     return dates.slice(0, 5); // Show next 5 available dates
   };
 

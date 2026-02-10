@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { GameState, Challenge, MicroWin } from '@/types/gamification';
+import { GameState, Challenge, MicroWin, InventoryItem } from '@/types/gamification';
 
 // Mock initial state - will be replaced with Supabase later
 const INITIAL_GAME_STATE: GameState = {
@@ -8,6 +8,17 @@ const INITIAL_GAME_STATE: GameState = {
   xpToNextLevel: 350,
   dailyXP: 85,
   weeklyXP: 420,
+  // HP System
+  currentHP: 50,
+  maxHP: 50,
+  // Currency
+  gold: 25,
+  gems: 2,
+  // Character
+  characterClass: 'warrior',
+  equippedItems: {},
+  inventory: [],
+  // Energy
   currentEnergy: 7,
   maxEnergy: 10,
   lastEnergyRefill: new Date(),
@@ -27,6 +38,8 @@ const INITIAL_GAME_STATE: GameState = {
 const STORAGE_KEY = 'sparkMasteryGameState';
 const WORKOUT_XP_REWARD = 150;
 const CHECKIN_XP_REWARD = 50;
+const HABIT_COMPLETE_GOLD = 5;
+const DEATH_GOLD_PENALTY = 0.5; // Lose 50% gold on death
 
 const serializeGameState = (state: GameState) => ({
   ...state,
@@ -189,17 +202,109 @@ export const useGameState = () => {
     return 'low';
   }, [gameState]);
 
+  // HP Management
+  const updateHP = useCallback((amount: number) => {
+    setGameState(prev => {
+      const newHP = Math.max(0, Math.min(prev.maxHP, prev.currentHP + amount));
+      
+      // Death penalty: lose 50% gold, -1 level
+      if (newHP <= 0) {
+        console.log('💀 You have been defeated! Losing gold...');
+        return {
+          ...prev,
+          currentHP: prev.maxHP, // Revive at full HP
+          gold: Math.floor(prev.gold * (1 - DEATH_GOLD_PENALTY)),
+          level: Math.max(1, prev.level - 1),
+        };
+      }
+
+      return {
+        ...prev,
+        currentHP: newHP,
+      };
+    });
+  }, []);
+
+  // Currency Management
+  const addGold = useCallback((amount: number) => {
+    setGameState(prev => ({
+      ...prev,
+      gold: prev.gold + amount,
+    }));
+  }, []);
+
+  const spendGold = useCallback((amount: number): boolean => {
+    let success = false;
+    setGameState(prev => {
+      if (prev.gold >= amount) {
+        success = true;
+        return { ...prev, gold: prev.gold - amount };
+      }
+      return prev;
+    });
+    return success;
+  }, []);
+
+  const addGems = useCallback((amount: number) => {
+    setGameState(prev => ({
+      ...prev,
+      gems: prev.gems + amount,
+    }));
+  }, []);
+
+  const spendGems = useCallback((amount: number): boolean => {
+    let success = false;
+    setGameState(prev => {
+      if (prev.gems >= amount) {
+        success = true;
+        return { ...prev, gems: prev.gems - amount };
+      }
+      return prev;
+    });
+    return success;
+  }, []);
+
+  // Purchase item
+  const purchaseItem = useCallback((item: InventoryItem) => {
+    const spend = item.currency === 'gold' ? spendGold : spendGems;
+    if (spend(item.cost)) {
+      setGameState(prev => ({
+        ...prev,
+        inventory: [...prev.inventory, item],
+      }));
+      return true;
+    }
+    return false;
+  }, [spendGold, spendGems]);
+
+  // Get HP status
+  const getHPStatus = useCallback(() => {
+    const { currentHP, maxHP } = gameState;
+    const percentage = (currentHP / maxHP) * 100;
+    if (percentage > 60) return 'healthy';
+    if (percentage > 30) return 'warning';
+    return 'critical';
+  }, [gameState]);
+
   return {
     gameState,
     isLoading,
     addXP,
     updateEnergy,
+    updateHP,
+    addGold,
+    spendGold,
+    addGems,
+    spendGems,
+    purchaseItem,
     completeChallenge,
     completeMicroWin,
     updateStreak,
     logWorkout,
     logDailyCheckIn,
     isStreakAtRisk,
-    getEnergyStatus
+    getEnergyStatus,
+    getHPStatus,
+    HABIT_COMPLETE_GOLD,
   };
 };

@@ -14,7 +14,8 @@ import {
   Crown,
   Menu,
   Sparkles,
-  Map
+  Map,
+  CheckSquare,
 } from 'lucide-react';
 
 // Components
@@ -25,13 +26,18 @@ import { AIChat } from '@/components/ai/AIChat';
 import { ChallengeCard } from '@/components/challenges/ChallengeCard';
 import { Leaderboard } from '@/components/leaderboard/Leaderboard';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
+import { EnhancedDashboardStats } from '@/components/dashboard/EnhancedDashboardStats';
+import { CharacterStats } from '@/components/character/CharacterStats';
+import { RewardsShop } from '@/components/character/RewardsShop';
+import { EnhancedHabitTracker } from '@/components/habits/EnhancedHabitTracker';
 import { ProgressRoadmap } from '@/components/progress/ProgressRoadmap';
 
 // Hooks
 import { useGameState } from '@/hooks/useGameState';
 
 // Types
-import { AIMessage, Challenge, MicroWin } from '@/types/gamification';
+import { AIMessage, Challenge, MicroWin, InventoryItem, Reward } from '@/types/gamification';
+import { Habit, HabitStats } from '@/types/habits';
 import { sendMessageToGemini } from '@/lib/gemini';
 
 // Mock data
@@ -101,12 +107,30 @@ const deserializeChallenges = (stored: string | null): Challenge[] => {
 const Index = () => {
   const { 
     gameState, 
+    addXP,
+    updateHP,
+    addGold,
+    purchaseItem,
     completeChallenge, 
     completeMicroWin, 
     isStreakAtRisk, 
     logWorkout, 
-    logDailyCheckIn 
+    logDailyCheckIn,
+    HABIT_COMPLETE_GOLD,
   } = useGameState();
+
+  // Habit stats tracking (will be computed from real data later)
+  const [habitStats, setHabitStats] = useState<HabitStats>({
+    habitsCompletedToday: 0,
+    dailiesCompletedToday: 0,
+    todosCompletedToday: 0,
+    totalHabits: 2,
+    totalDailies: 3,
+    totalTodos: 2,
+    goldEarnedToday: 0,
+    xpEarnedToday: 0,
+    missedDailies: 0,
+  });
   const [selectedTab, setSelectedTab] = useState('dashboard');
   const [chatMessages, setChatMessages] = useState<AIMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -228,6 +252,45 @@ const Index = () => {
     // TODO: Implement milestone tracking
   };
 
+  // Habit handlers
+  const handleHabitComplete = (habit: Habit) => {
+    addXP(habit.xpReward, 'habit_complete');
+    addGold(habit.goldReward);
+    setHabitStats(prev => {
+      const key = habit.type === 'habit' ? 'habitsCompletedToday'
+        : habit.type === 'daily' ? 'dailiesCompletedToday'
+        : 'todosCompletedToday';
+      return {
+        ...prev,
+        [key]: prev[key] + 1,
+        goldEarnedToday: prev.goldEarnedToday + habit.goldReward,
+        xpEarnedToday: prev.xpEarnedToday + habit.xpReward,
+      };
+    });
+  };
+
+  const handleHabitMissed = (habit: Habit) => {
+    if (habit.hpDamage > 0) {
+      updateHP(-habit.hpDamage);
+    }
+    setHabitStats(prev => ({
+      ...prev,
+      missedDailies: prev.missedDailies + 1,
+    }));
+  };
+
+  const handlePurchase = (item: InventoryItem | Reward): boolean => {
+    if ('rarity' in item) {
+      return purchaseItem(item as InventoryItem);
+    }
+    // Custom reward — just spend the currency
+    const reward = item as Reward;
+    if (reward.currency === 'gold') {
+      return gameState.gold >= reward.cost;
+    }
+    return false;
+  };
+
   const hoursUntilStreakExpiry = () => {
     const now = new Date();
     const lastActivity = new Date(gameState.lastStreakActivity);
@@ -268,46 +331,50 @@ const Index = () => {
 
         {/* Navigation Tabs */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="dashboard" className="gap-2">
+          <TabsList className="grid w-full grid-cols-7">
+            <TabsTrigger value="dashboard" className="gap-1.5">
               <Home className="h-4 w-4" />
-              <span className="hidden sm:inline">Dashboard</span>
+              <span className="hidden sm:inline text-xs">Dashboard</span>
             </TabsTrigger>
-            <TabsTrigger value="progress" className="gap-2">
+            <TabsTrigger value="habits" className="gap-1.5">
+              <CheckSquare className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Habits</span>
+            </TabsTrigger>
+            <TabsTrigger value="progress" className="gap-1.5">
               <Map className="h-4 w-4" />
-              <span className="hidden sm:inline">Progress</span>
+              <span className="hidden sm:inline text-xs">Progress</span>
             </TabsTrigger>
-            <TabsTrigger value="coach" className="gap-2">
+            <TabsTrigger value="coach" className="gap-1.5">
               <MessageSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">AI Coach</span>
+              <span className="hidden sm:inline text-xs">AI Coach</span>
             </TabsTrigger>
-            <TabsTrigger value="challenges" className="gap-2">
+            <TabsTrigger value="challenges" className="gap-1.5">
               <Target className="h-4 w-4" />
-              <span className="hidden sm:inline">Challenges</span>
+              <span className="hidden sm:inline text-xs">Challenges</span>
             </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="gap-2">
+            <TabsTrigger value="leaderboard" className="gap-1.5">
               <Trophy className="h-4 w-4" />
-              <span className="hidden sm:inline">Leaderboard</span>
+              <span className="hidden sm:inline text-xs">Leaderboard</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="gap-2">
+            <TabsTrigger value="settings" className="gap-1.5">
               <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Settings</span>
+              <span className="hidden sm:inline text-xs">Settings</span>
             </TabsTrigger>
           </TabsList>
 
           {/* Dashboard Tab */}
           <TabsContent value="dashboard" className="space-y-6">
-            {/* Quick Stats */}
-            <DashboardStats stats={{
-              workoutsCompleted: gameState.workoutsCompleted,
-              challengesCompleted: gameState.challengesCompleted,
-              totalXP: gameState.totalXP,
-              currentStreak: gameState.currentStreak
-            }} />
+            {/* Enhanced Stats */}
+            <EnhancedDashboardStats
+              gameState={gameState}
+              habitStats={habitStats}
+            />
 
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Left Column - Gamification */}
               <div className="lg:col-span-2 space-y-6">
+                {/* Character Stats */}
+                <CharacterStats gameState={gameState} />
                 {/* Energy and XP */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <Card className="shadow-card">
@@ -419,6 +486,26 @@ const Index = () => {
                     )}
                   </CardContent>
                 </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Habits Tab */}
+          <TabsContent value="habits" className="space-y-6">
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <EnhancedHabitTracker
+                  onHabitComplete={handleHabitComplete}
+                  onHabitMissed={handleHabitMissed}
+                />
+              </div>
+              <div className="space-y-6">
+                <CharacterStats gameState={gameState} />
+                <RewardsShop
+                  gold={gameState.gold}
+                  gems={gameState.gems}
+                  onPurchase={handlePurchase}
+                />
               </div>
             </div>
           </TabsContent>

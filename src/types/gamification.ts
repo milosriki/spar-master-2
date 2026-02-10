@@ -12,6 +12,38 @@ export interface User {
   lastActivityAt: Date;
 }
 
+export type CharacterClass = 'warrior' | 'mage' | 'healer' | 'rogue';
+
+export interface EquippedItems {
+  weapon?: string;
+  armor?: string;
+  head?: string;
+  shield?: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  type: 'weapon' | 'armor' | 'head' | 'shield' | 'potion' | 'food';
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  stats?: Record<string, number>;
+  cost: number;
+  currency: 'gold' | 'gems';
+  description: string;
+  icon: string;
+}
+
+export interface Reward {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  currency: 'gold' | 'gems';
+  icon: string;
+  type: 'equipment' | 'custom';
+  item?: InventoryItem;
+}
+
 export interface GameState {
   // Core Stats
   totalXP: number;
@@ -19,6 +51,19 @@ export interface GameState {
   xpToNextLevel: number;
   dailyXP: number;
   weeklyXP: number;
+  
+  // HP System (Habitica-style)
+  currentHP: number;
+  maxHP: number;
+  
+  // Currency
+  gold: number;
+  gems: number;
+  
+  // Character
+  characterClass: CharacterClass;
+  equippedItems: EquippedItems;
+  inventory: InventoryItem[];
   
   // Energy System
   currentEnergy: number;

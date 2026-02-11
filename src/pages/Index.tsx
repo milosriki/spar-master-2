@@ -16,6 +16,7 @@ import {
   Sparkles,
   Map,
   CheckSquare,
+  Share2,
 } from 'lucide-react';
 
 // Components
@@ -54,6 +55,13 @@ import { LeaderboardService } from '@/services/leaderboardService';
 import { LeadCaptureForm } from '@/components/booking/LeadCaptureForm';
 import { AICoachService, AIHabitPlan } from '@/services/AICoachService';
 import { analytics } from '@/services/AnalyticsService';
+
+// Growth Loop
+import ShareCard from '@/components/progress/ShareCard';
+import { useShareCard } from '@/hooks/useShareCard';
+import { ReferralService } from '@/services/ReferralService';
+import { NotificationService } from '@/services/NotificationService';
+import ReferralBanner from '@/components/gamification/ReferralBanner';
 
 const Index = () => {
   const { 
@@ -114,7 +122,15 @@ const Index = () => {
   // Track app open
   useEffect(() => {
     analytics.track('app_open');
+    ReferralService.captureReferral();
+    NotificationService.registerServiceWorker();
+    if (gameState.currentStreak > 0) {
+      NotificationService.scheduleStreakReminder(gameState.currentStreak);
+    }
   }, []);
+
+  // Share card hook
+  const { cardRef, shareCard, isGenerating } = useShareCard();
 
 
   // Real AI response using Gemini — with multi-turn context, habits, and time awareness
@@ -232,7 +248,13 @@ const Index = () => {
     });
 
     analytics.track('habit_complete', { type: habit.type, xp: habit.xpReward });
-  }, [addXP, addGold, spawnReward]);
+
+    // Prompt for notifications after first habit (optimal engagement moment)
+    const totalCompleted = habitStats.habitsCompletedToday + habitStats.dailiesCompletedToday + habitStats.todosCompletedToday;
+    if (totalCompleted === 0 && NotificationService.getPermission() === 'default') {
+      setTimeout(() => NotificationService.requestPermission(), 2000);
+    }
+  }, [addXP, addGold, spawnReward, habitStats]);
 
   const handleHabitMissed = useCallback((habit: Habit) => {
     if (habit.hpDamage > 0) {
@@ -639,6 +661,19 @@ const Index = () => {
                         </CardContent>
                       </Card>
                     </AnimatedItem>
+
+                    {/* Growth Loop: Share & Referral */}
+                    <AnimatedItem>
+                      <Button
+                        onClick={shareCard}
+                        disabled={isGenerating}
+                        className="w-full bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 text-white gap-2 mb-4"
+                      >
+                        <Share2 className="h-4 w-4" />
+                        {isGenerating ? 'Generating...' : 'Share My Progress'}
+                      </Button>
+                      <ReferralBanner />
+                    </AnimatedItem>
                   </div>
                 </div>
               </AnimatedLayout>
@@ -764,6 +799,19 @@ const Index = () => {
         messagesUsed={getAIMessageCount()}
         maxFreeMessages={getMaxFreeMessages()}
       />
+
+      {/* Hidden share card for html2canvas capture */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        <ShareCard
+          ref={cardRef}
+          username={'Warrior'}
+          level={gameState.level}
+          xp={gameState.totalXP}
+          streak={gameState.currentStreak}
+          habitsCompleted={habitStats.habitsCompletedToday + habitStats.dailiesCompletedToday}
+          goldEarned={gameState.gold}
+        />
+      </div>
     </div>
   );
 };

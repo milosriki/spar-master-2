@@ -82,6 +82,10 @@ export interface GameState {
   challengesCompleted: number;
   achievementsUnlocked: string[];
   
+  // Challenges
+  activeChallenges: Challenge[];
+  acceptedChallengeIds: string[];
+
   // Social
   rank: number;
   leaderboardPosition: number;

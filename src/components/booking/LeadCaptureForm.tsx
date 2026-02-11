@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Check, Loader2, Mail, User, Sparkles } from 'lucide-react';
+import { AICoachService, AIHabitPlan } from '@/services/AICoachService';
 import { createLead, LeadInput } from '@/services/leadService';
 
 interface LeadCaptureFormProps {
   source?: string;
   compact?: boolean;
-  onSuccess?: (leadId: string) => void;
+  onSuccess?: (leadId: string, plan?: AIHabitPlan) => void;
 }
 
 export const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
@@ -28,6 +29,7 @@ export const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -55,9 +57,25 @@ export const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
         source,
       };
 
+      // 1. Capture Lead
       const lead = await createLead(input);
+      
+      // 2. Generate AI Plan (if goal provided)
+      let aiPlan: AIHabitPlan | undefined;
+      if (formData.goal) {
+        setGeneratingPlan(true);
+        try {
+           aiPlan = await AICoachService.generateHabitPlan(formData.goal, formData.ageRange);
+        } catch (aiError) {
+           console.error("AI Plan Generation Failed:", aiError);
+           // Continue without plan (graceful degradation)
+        } finally {
+           setGeneratingPlan(false);
+        }
+      }
+
       setSubmitted(true);
-      onSuccess?.(lead.id);
+      onSuccess?.(lead.id, aiPlan);
 
       // Auto-reset after 3 seconds
       setTimeout(() => {
@@ -226,7 +244,7 @@ export const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({
             className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold"
           >
             {loading ? (
-              <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Submitting...</>
+              <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> {generatingPlan ? 'Designing Plan...' : 'Submitting...'}</>
             ) : (
               'Get My Free Plan →'
             )}

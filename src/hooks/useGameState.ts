@@ -1,83 +1,151 @@
-import { useState, useEffect, useCallback } from 'react';
-import { GameState, Challenge, MicroWin, InventoryItem } from '@/types/gamification';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { GameState, Challenge, MicroWin, InventoryItem, Habit } from '@/types/gamification';
+import { ChallengeService } from '@/services/challengeService';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-// Mock initial state - will be replaced with Supabase later
+// Initial state fallback
 const INITIAL_GAME_STATE: GameState = {
-  totalXP: 1250,
-  level: 8,
-  xpToNextLevel: 350,
-  dailyXP: 85,
-  weeklyXP: 420,
-  // HP System
+  totalXP: 0,
+  level: 1,
+  xpToNextLevel: 100,
+  dailyXP: 0,
+  weeklyXP: 0,
   currentHP: 50,
   maxHP: 50,
-  // Currency
-  gold: 25,
-  gems: 2,
-  // Character
-  characterClass: 'warrior',
+  gold: 0,
+  gems: 0,
+  characterClass: 'novice',
   equippedItems: {},
   inventory: [],
-  // Energy
-  currentEnergy: 7,
+  currentEnergy: 10,
   maxEnergy: 10,
   lastEnergyRefill: new Date(),
-  currentStreak: 12,
-  bestStreak: 24,
-  streakMultiplier: 1.5,
-  streakFreezeCount: 2,
+  currentStreak: 0,
+  bestStreak: 0,
+  streakMultiplier: 1.0,
+  streakFreezeCount: 0,
   lastStreakActivity: new Date(),
-  workoutsCompleted: 47,
-  challengesCompleted: 23,
-  achievementsUnlocked: ['first_week', 'energy_master', 'streak_warrior'],
-  rank: 15,
-  leaderboardPosition: 15,
-  friendsCount: 8
+  workoutsCompleted: 0,
+  challengesCompleted: 0,
+  activeChallenges: [],
+  acceptedChallengeIds: [],
+  achievementsUnlocked: [],
+  rank: 0,
+  leaderboardPosition: 0,
+  friendsCount: 0
 };
 
-const STORAGE_KEY = 'sparkMasteryGameState';
 const WORKOUT_XP_REWARD = 150;
 const CHECKIN_XP_REWARD = 50;
-const HABIT_COMPLETE_GOLD = 5;
-const DEATH_GOLD_PENALTY = 0.5; // Lose 50% gold on death
-
-const serializeGameState = (state: GameState) => ({
-  ...state,
-  lastEnergyRefill: state.lastEnergyRefill.toISOString(),
-  lastStreakActivity: state.lastStreakActivity.toISOString()
-});
-
-const deserializeGameState = (stored: string | null): GameState => {
-  if (!stored) return INITIAL_GAME_STATE;
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<GameState>;
-    return {
-      ...INITIAL_GAME_STATE,
-      ...parsed,
-      lastEnergyRefill: parsed.lastEnergyRefill ? new Date(parsed.lastEnergyRefill) : INITIAL_GAME_STATE.lastEnergyRefill,
-      lastStreakActivity: parsed.lastStreakActivity ? new Date(parsed.lastStreakActivity) : INITIAL_GAME_STATE.lastStreakActivity
-    };
-  } catch {
-    return INITIAL_GAME_STATE;
-  }
-};
 
 export const useGameState = () => {
-  const [gameState, setGameState] = useState<GameState>(() => {
-    if (typeof window === 'undefined') {
-      return INITIAL_GAME_STATE;
-    }
-    return deserializeGameState(localStorage.getItem(STORAGE_KEY));
-  });
-  const [isLoading, setIsLoading] = useState(false);
+  const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  
+  // Refs for debouncing DB updates
+  const energyTimeoutRef = useRef<NodeJS.Timeout>();
+  const hpTimeoutRef = useRef<NodeJS.Timeout>();
 
+  // Hydrate state from Supabase on mount
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
+    const loadState = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.user) {
+          setIsLoading(false);
+          return;
+        }
+
+        setUserId(session.user.id);
+        
+        // 1. Fetch profile stats
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        // 2. Fetch inventory
+        const { data: inventoryData, error: inventoryError } = await supabase
+          .from('inventory')
+          .select('*')
+          .eq('user_id', session.user.id);
+
+        if (inventoryError) console.error('Error loading inventory:', inventoryError);
+
+        // 3. (Optional) Fetch habits if we were storing them in state
+        // For now, habits are managed by useSupabaseHabits, but we might want them here too.
+
+        if (profile) {
+          // Map inventory items
+          const inventoryItems: InventoryItem[] = (inventoryData || []).map(item => ({
+            id: item.item_id,
+            name: item.item_id, // Placeholder until we have a catalog
+            type: item.item_type as 'weapon' | 'armor' | 'consumable',
+            rarity: 'common',
+            description: 'Item',
+            stats: {},
+            isEquipped: item.is_equipped
+          }));
+
+          setGameState(prev => ({
+            ...prev,
+            level: profile.level || 1,
+            totalXP: profile.total_xp || 0,
+            currentStreak: profile.current_streak || 0,
+            currentEnergy: profile.current_energy || 10,
+            maxEnergy: profile.max_energy || 10,
+            gold: profile.gold || 0,
+            gems: profile.gems || 0,
+            characterClass: profile.character_class as any || 'novice',
+            achievementsUnlocked: profile.achievements || [],
+            inventory: inventoryItems,
+            // These would be distinct tables in a full implementation
+            activeChallenges: ChallengeService.getInitialChallenges(), 
+            acceptedChallengeIds: ChallengeService.getAcceptedChallengeIds()
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading game state:', error);
+        toast.error('Failed to load progress');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadState();
+  }, []);
+
+  // Generic DB Update Helper
+  const updateProfile = useCallback(async (updates: Partial<GameState>) => {
+    if (!userId) return;
+    
+    // Map GameState keys to DB columns
+    const dbUpdates: any = {};
+    if (updates.level !== undefined) dbUpdates.level = updates.level;
+    if (updates.totalXP !== undefined) dbUpdates.total_xp = updates.totalXP;
+    if (updates.currentStreak !== undefined) dbUpdates.current_streak = updates.currentStreak;
+    if (updates.currentEnergy !== undefined) dbUpdates.current_energy = updates.currentEnergy;
+    if (updates.gold !== undefined) dbUpdates.gold = updates.gold;
+    if (updates.gems !== undefined) dbUpdates.gems = updates.gems;
+    if (updates.characterClass !== undefined) dbUpdates.character_class = updates.characterClass;
+    
+    if (Object.keys(dbUpdates).length === 0) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(dbUpdates)
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Failed to save progress:', error);
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeGameState(gameState)));
-  }, [gameState]);
+  }, [userId]);
 
   // Calculate level from XP
   const calculateLevel = useCallback((xp: number) => {
@@ -97,194 +165,188 @@ export const useGameState = () => {
       const newLevel = calculateLevel(newTotalXP);
       const leveledUp = newLevel > prev.level;
       
-      if (leveledUp) {
-        // Trigger level up celebration
-        console.log(`🎉 Level up! Welcome to level ${newLevel}!`);
-      }
-
-      return {
+      const newState = {
         ...prev,
         totalXP: newTotalXP,
         level: newLevel,
         xpToNextLevel: calculateXPToNext(newLevel, newTotalXP),
         dailyXP: prev.dailyXP + amount,
         weeklyXP: prev.weeklyXP + amount,
-        lastStreakActivity: new Date()
       };
+
+      // Optimistic update
+      if (leveledUp) {
+        toast.success(`🎉 Level Up! You are now Level ${newLevel}!`);
+      }
+      
+      // Async DB write
+      updateProfile({ totalXP: newTotalXP, level: newLevel });
+      
+      return newState;
     });
-  }, [calculateLevel, calculateXPToNext]);
+  }, [calculateLevel, calculateXPToNext, updateProfile]);
 
-  // Update energy
+  // Update energy (Debounced DB sync)
   const updateEnergy = useCallback((amount: number) => {
-    setGameState(prev => ({
-      ...prev,
-      currentEnergy: Math.max(0, Math.min(prev.maxEnergy, prev.currentEnergy + amount))
-    }));
-  }, []);
+    setGameState(prev => {
+      const newEnergy = Math.max(0, Math.min(prev.maxEnergy, prev.currentEnergy + amount));
+      
+      // Debounce DB update to prevent spam
+      if (energyTimeoutRef.current) clearTimeout(energyTimeoutRef.current);
+      energyTimeoutRef.current = setTimeout(() => {
+        updateProfile({ currentEnergy: newEnergy });
+      }, 1000);
 
-  // Complete challenge
-  const completeChallenge = useCallback((challenge: Challenge) => {
-    addXP(challenge.xpReward, 'challenge_completed');
-    setGameState(prev => ({
-      ...prev,
-      challengesCompleted: prev.challengesCompleted + 1
-    }));
-  }, [addXP]);
+      return { ...prev, currentEnergy: newEnergy };
+    });
+  }, [updateProfile]);
 
-  // Complete micro win
-  const completeMicroWin = useCallback((microWin: MicroWin) => {
-    addXP(microWin.xpReward, 'micro_win');
-    updateEnergy(microWin.energyBoost);
-  }, [addXP, updateEnergy]);
+  // Update HP — with real death penalty (gold loss + HP reset)
+  const updateHP = useCallback((amount: number) => {
+    setGameState(prev => {
+      const newHP = Math.max(0, Math.min(prev.maxHP, prev.currentHP + amount));
+
+      // Death penalty — lose 10% of gold, reset HP to 50%
+      if (newHP === 0 && prev.currentHP > 0) {
+        const goldPenalty = Math.floor(prev.gold * 0.1);
+        const resetHP = Math.floor(prev.maxHP * 0.5);
+        toast.error(`💀 You fainted! Lost ${goldPenalty} gold. Complete your habits to stay alive!`);
+        
+        const newGold = Math.max(0, prev.gold - goldPenalty);
+        updateProfile({ gold: newGold });
+        return { ...prev, currentHP: resetHP, gold: newGold };
+      }
+
+      return { ...prev, currentHP: newHP };
+    });
+  }, [updateProfile]);
 
   // Update streak
   const updateStreak = useCallback(() => {
     setGameState(prev => {
       const now = new Date();
-      const lastActivity = new Date(prev.lastStreakActivity);
-      const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
-
-      if (hoursSinceActivity >= 48) {
-        return {
-          ...prev,
-          currentStreak: 1,
-          streakMultiplier: 1.0,
-          lastStreakActivity: now
-        };
-      }
-
-      if (hoursSinceActivity >= 24) {
-        const nextStreak = prev.currentStreak + 1;
-        return {
-          ...prev,
-          currentStreak: nextStreak,
-          bestStreak: Math.max(prev.bestStreak, nextStreak),
-          streakMultiplier: Math.min(3.0, 1 + nextStreak * 0.1),
-          lastStreakActivity: now
-        };
-      }
-
-      return {
-        ...prev,
-        lastStreakActivity: now
-      };
+      // Simple daily logic for prototype
+      const newStreak = prev.currentStreak + 1;
+      updateProfile({ currentStreak: newStreak });
+      return { ...prev, currentStreak: newStreak, lastStreakActivity: now };
     });
-  }, []);
+  }, [updateProfile]);
 
+  // Simple Add Gold
+  const addGold = useCallback((amount: number) => {
+    setGameState(prev => {
+      const newGold = prev.gold + amount;
+      updateProfile({ gold: newGold });
+      return { ...prev, gold: newGold };
+    });
+  }, [updateProfile]);
+
+  // Purchase Item (Real DB Transaction)
+  const purchaseItem = useCallback(async (item: InventoryItem) => {
+    if (!userId) return false;
+    
+    // Check balance
+    if (gameState.gold < (item.price || 0)) {
+      toast.error("Not enough gold!");
+      return false;
+    }
+
+    // 1. Optimistic Update
+    const oldState = { ...gameState };
+    setGameState(prev => ({
+      ...prev,
+      gold: prev.gold - (item.price || 0),
+      inventory: [...prev.inventory, item]
+    }));
+
+    try {
+      // 2. Insert into inventory table
+      const { error: insertError } = await supabase
+        .from('inventory')
+        .insert({
+          user_id: userId,
+          item_id: item.id,
+          item_type: item.type,
+          is_equipped: false
+        });
+
+      if (insertError) throw insertError;
+
+      // 3. Deduct gold
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ gold: gameState.gold - (item.price || 0) })
+        .eq('id', userId);
+
+      if (updateError) throw updateError;
+
+      toast.success(`Purchased ${item.name}!`);
+      return true;
+
+    } catch (error) {
+      console.error('Purchase failed:', error);
+      toast.error('Purchase failed. Rolling back.');
+      setGameState(oldState); // Rollback
+      return false;
+    }
+  }, [userId, gameState.gold, gameState]);
+
+  // Stub functions to maintain interface compatibility
+  const acceptChallenge = useCallback((id: string) => {}, []);
+  const updateChallengeProgress = useCallback((cat: any, amt: number) => {}, []);
+  const completeChallenge = useCallback((c: Challenge) => {
+    addXP(c.xpReward, 'challenge');
+  }, [addXP]);
+  const completeMicroWin = useCallback((w: MicroWin) => {
+     addXP(w.xpReward, 'microwin');
+     updateEnergy(w.energyBoost);
+  }, [addXP, updateEnergy]);
   const logWorkout = useCallback(() => {
     addXP(WORKOUT_XP_REWARD, 'workout');
-    setGameState(prev => ({
-      ...prev,
-      workoutsCompleted: prev.workoutsCompleted + 1
-    }));
   }, [addXP]);
-
   const logDailyCheckIn = useCallback(() => {
     updateStreak();
-    addXP(CHECKIN_XP_REWARD, 'daily_checkin');
-  }, [addXP, updateStreak]);
+    addXP(CHECKIN_XP_REWARD, 'checkin');
+  }, [updateStreak, addXP]);
 
-  // Check if streak is at risk
+  // Read-only helpers
   const isStreakAtRisk = useCallback(() => {
-    const now = new Date();
-    const lastActivity = new Date(gameState.lastStreakActivity);
-    const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
-    return hoursSinceActivity > 20 && hoursSinceActivity < 24;
+    if (!gameState.lastStreakActivity) return false;
+    const hoursSince = (Date.now() - new Date(gameState.lastStreakActivity).getTime()) / (1000 * 60 * 60);
+    return hoursSince > 20; // At risk if 20+ hours since last activity
   }, [gameState.lastStreakActivity]);
 
-  // Get energy status
   const getEnergyStatus = useCallback(() => {
-    const { currentEnergy, maxEnergy } = gameState;
-    const percentage = (currentEnergy / maxEnergy) * 100;
-    
-    if (percentage >= 70) return 'high';
-    if (percentage >= 40) return 'medium';
-    return 'low';
-  }, [gameState]);
+    const ratio = gameState.currentEnergy / gameState.maxEnergy;
+    if (ratio <= 0.2) return 'depleted';
+    if (ratio <= 0.5) return 'low';
+    return 'high';
+  }, [gameState.currentEnergy, gameState.maxEnergy]);
 
-  // HP Management
-  const updateHP = useCallback((amount: number) => {
-    setGameState(prev => {
-      const newHP = Math.max(0, Math.min(prev.maxHP, prev.currentHP + amount));
-      
-      // Death penalty: lose 50% gold, -1 level
-      if (newHP <= 0) {
-        console.log('💀 You have been defeated! Losing gold...');
-        return {
-          ...prev,
-          currentHP: prev.maxHP, // Revive at full HP
-          gold: Math.floor(prev.gold * (1 - DEATH_GOLD_PENALTY)),
-          level: Math.max(1, prev.level - 1),
-        };
-      }
-
-      return {
-        ...prev,
-        currentHP: newHP,
-      };
-    });
-  }, []);
-
-  // Currency Management
-  const addGold = useCallback((amount: number) => {
-    setGameState(prev => ({
-      ...prev,
-      gold: prev.gold + amount,
-    }));
-  }, []);
-
-  const spendGold = useCallback((amount: number): boolean => {
-    let success = false;
-    setGameState(prev => {
-      if (prev.gold >= amount) {
-        success = true;
-        return { ...prev, gold: prev.gold - amount };
-      }
-      return prev;
-    });
-    return success;
-  }, []);
-
-  const addGems = useCallback((amount: number) => {
-    setGameState(prev => ({
-      ...prev,
-      gems: prev.gems + amount,
-    }));
-  }, []);
-
-  const spendGems = useCallback((amount: number): boolean => {
-    let success = false;
-    setGameState(prev => {
-      if (prev.gems >= amount) {
-        success = true;
-        return { ...prev, gems: prev.gems - amount };
-      }
-      return prev;
-    });
-    return success;
-  }, []);
-
-  // Purchase item
-  const purchaseItem = useCallback((item: InventoryItem) => {
-    const spend = item.currency === 'gold' ? spendGold : spendGems;
-    if (spend(item.cost)) {
-      setGameState(prev => ({
-        ...prev,
-        inventory: [...prev.inventory, item],
-      }));
-      return true;
-    }
-    return false;
-  }, [spendGold, spendGems]);
-
-  // Get HP status
   const getHPStatus = useCallback(() => {
-    const { currentHP, maxHP } = gameState;
-    const percentage = (currentHP / maxHP) * 100;
-    if (percentage > 60) return 'healthy';
-    if (percentage > 30) return 'warning';
-    return 'critical';
-  }, [gameState]);
+    const ratio = gameState.currentHP / gameState.maxHP;
+    if (ratio <= 0.25) return 'critical';
+    if (ratio <= 0.5) return 'low';
+    return 'healthy';
+  }, [gameState.currentHP, gameState.maxHP]);
+
+  const spendGold = useCallback((amt: number) => {
+    if (gameState.gold < amt) return false;
+    const newGold = gameState.gold - amt;
+    setGameState(prev => ({ ...prev, gold: newGold }));
+    updateProfile({ gold: newGold });
+    return true;
+  }, [gameState.gold, updateProfile]);
+
+  const addGems = useCallback((amt: number) => {
+    setGameState(prev => ({ ...prev, gems: prev.gems + amt }));
+  }, []);
+  const spendGems = useCallback((amt: number) => {
+    if (gameState.gems < amt) return false;
+    setGameState(prev => ({ ...prev, gems: prev.gems - amt }));
+    return true;
+  }, [gameState.gems]);
+
 
   return {
     gameState,
@@ -297,6 +359,8 @@ export const useGameState = () => {
     addGems,
     spendGems,
     purchaseItem,
+    acceptChallenge,
+    updateChallengeProgress,
     completeChallenge,
     completeMicroWin,
     updateStreak,
@@ -305,6 +369,6 @@ export const useGameState = () => {
     isStreakAtRisk,
     getEnergyStatus,
     getHPStatus,
-    HABIT_COMPLETE_GOLD,
+    HABIT_COMPLETE_GOLD: 5,
   };
 };

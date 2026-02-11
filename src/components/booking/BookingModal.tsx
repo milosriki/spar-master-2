@@ -28,6 +28,8 @@ interface BookingModalProps {
     name?: string;
     email?: string;
     sessionType?: string;
+    notes?: string;
+    goal?: string;
   };
 }
 
@@ -63,15 +65,22 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     [slots, selectedDate]
   );
 
-  // Reset state when modal opens (fixes PR #3 stale state bug)
+  // Reset state when modal opens — auto-fill from AI context if available
   useEffect(() => {
     if (isOpen) {
       setStep(1);
+      // Build AI-enriched notes from prefill context
+      const contextNotes = [
+        prefillData?.goal && `Goal: ${prefillData.goal}`,
+        prefillData?.notes,
+      ].filter(Boolean).join(' | ');
+
       setFormData({
         ...INITIAL_FORM,
         name: prefillData?.name || '',
         email: prefillData?.email || '',
         sessionType: prefillData?.sessionType || 'consultation',
+        notes: contextNotes || '',
       });
       setSelectedDate(null);
       setSelectedTime(null);

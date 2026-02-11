@@ -13,60 +13,44 @@ import {
 interface EnhancedHabitTrackerProps {
   onHabitComplete: (habit: Habit) => void;
   onHabitMissed: (habit: Habit) => void;
+  initialHabits?: Habit[];
+  onHabitsChange?: (habits: Habit[]) => void;
 }
 
 // Mock habits data — will be replaced with Supabase
 const MOCK_HABITS: Habit[] = [
   {
-    id: '1', title: 'Morning Workout', notes: '30 min strength training',
-    type: 'daily', xpReward: 25, goldReward: 5, taskColor: 'good', taskValue: 5,
-    hpDamage: 5, isCompleteToday: false, streak: 7,
-    completionHistory: [], createdAt: new Date().toISOString(),
-    frequency: 'weekdays',
-  },
-  {
-    id: '2', title: 'Drink 3L Water', notes: 'Stay hydrated',
-    type: 'daily', xpReward: 10, goldReward: 2, taskColor: 'better', taskValue: 8,
-    hpDamage: 3, isCompleteToday: false, streak: 14,
-    completionHistory: [], createdAt: new Date().toISOString(),
-    frequency: 'daily',
-  },
-  {
-    id: '3', title: 'Processed Sugar', notes: 'Avoid processed sugars',
-    type: 'habit', xpReward: 15, goldReward: 3, taskColor: 'neutral', taskValue: 0,
-    hpDamage: 0, isCompleteToday: false, streak: 0,
-    completionHistory: [], createdAt: new Date().toISOString(),
-    positiveCount: 12, negativeCount: 5,
-  },
-  {
-    id: '4', title: '10k Steps', notes: 'Walk 10,000 steps daily',
-    type: 'daily', xpReward: 20, goldReward: 4, taskColor: 'good', taskValue: 4,
-    hpDamage: 4, isCompleteToday: false, streak: 3,
-    completionHistory: [], createdAt: new Date().toISOString(),
-    frequency: 'daily',
-  },
-  {
-    id: '5', title: 'Meal Prep Sunday', notes: 'Prepare meals for the week',
-    type: 'todo', xpReward: 50, goldReward: 10, taskColor: 'neutral', taskValue: 0,
-    hpDamage: 0, isCompleteToday: false, streak: 0,
-    completionHistory: [], createdAt: new Date().toISOString(),
-    priority: 'hard', dueDate: new Date(Date.now() + 2 * 86400000).toISOString(),
-  },
-  {
-    id: '6', title: 'Book PT Session', notes: 'Schedule next personal training',
-    type: 'todo', xpReward: 25, goldReward: 5, taskColor: 'neutral', taskValue: 0,
-    hpDamage: 0, isCompleteToday: false, streak: 0,
-    completionHistory: [], createdAt: new Date().toISOString(),
-    priority: 'medium',
-  },
+    id: 'welcome-1', 
+    title: 'Welcome to Spark Mastery', 
+    notes: 'This is your habit tracker. AI will fill this soon.',
+    type: 'habit', 
+    xpReward: 10, 
+    goldReward: 0, 
+    taskColor: 'neutral', 
+    taskValue: 0,
+    hpDamage: 0, 
+    isCompleteToday: false, 
+    streak: 0,
+    completionHistory: [], 
+    createdAt: new Date().toISOString(),
+  }
 ];
 
 export const EnhancedHabitTracker: React.FC<EnhancedHabitTrackerProps> = ({
   onHabitComplete,
   onHabitMissed,
+  initialHabits,
+  onHabitsChange,
 }) => {
-  const [habits, setHabits] = useState<Habit[]>(MOCK_HABITS);
+  const [habits, setHabits] = useState<Habit[]>(initialHabits || MOCK_HABITS);
   const [activeTab, setActiveTab] = useState<HabitType>('daily');
+
+  // Sync changes to parent
+  React.useEffect(() => {
+    if (onHabitsChange) {
+      onHabitsChange(habits);
+    }
+  }, [habits, onHabitsChange]);
 
   const filteredHabits = useMemo(
     () => habits.filter((h) => h.type === activeTab),

@@ -12,7 +12,7 @@ import {
 interface RewardsShopProps {
   gold: number;
   gems: number;
-  onPurchase: (item: InventoryItem | Reward) => boolean;
+  onPurchase: (item: InventoryItem | Reward) => Promise<boolean>;
 }
 
 const RARITY_STYLES: Record<string, string> = {
@@ -83,8 +83,8 @@ const CUSTOM_REWARDS: Reward[] = [
 export const RewardsShop: React.FC<RewardsShopProps> = ({ gold, gems, onPurchase }) => {
   const [purchaseAnimation, setPurchaseAnimation] = useState<string | null>(null);
 
-  const handlePurchase = (item: InventoryItem | Reward) => {
-    const success = onPurchase(item);
+  const handlePurchase = async (item: InventoryItem | Reward) => {
+    const success = await onPurchase(item);
     if (success) {
       setPurchaseAnimation(item.id);
       setTimeout(() => setPurchaseAnimation(null), 600);

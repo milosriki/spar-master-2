@@ -1,4 +1,6 @@
 -- Create leads table for Spark Mastery landing page
+-- Made idempotent (safe to re-run)
+
 CREATE TABLE IF NOT EXISTS public.spark_leads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -12,23 +14,36 @@ CREATE TABLE IF NOT EXISTS public.spark_leads (
 -- Enable RLS
 ALTER TABLE public.spark_leads ENABLE ROW LEVEL SECURITY;
 
--- Allow anyone to insert leads (public form)
-CREATE POLICY "Anyone can submit leads"
-  ON public.spark_leads
-  FOR INSERT
-  WITH CHECK (true);
+-- Idempotent policies
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Anyone can submit leads" ON public.spark_leads;
+  CREATE POLICY "Anyone can submit leads"
+    ON public.spark_leads
+    FOR INSERT
+    WITH CHECK (true);
 
--- Only authenticated users can view leads
-CREATE POLICY "Authenticated users can view leads"
-  ON public.spark_leads
-  FOR SELECT
-  USING (auth.role() = 'authenticated');
+  DROP POLICY IF EXISTS "Authenticated users can view leads" ON public.spark_leads;
+  CREATE POLICY "Authenticated users can view leads"
+    ON public.spark_leads
+    FOR SELECT
+    USING (auth.role() = 'authenticated');
+END $$;
 
--- Create index for faster email lookups
-CREATE INDEX idx_spark_leads_email ON public.spark_leads(email);
-CREATE INDEX idx_spark_leads_created_at ON public.spark_leads(created_at DESC);
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_spark_leads_email ON public.spark_leads(email);
+CREATE INDEX IF NOT EXISTS idx_spark_leads_created_at ON public.spark_leads(created_at DESC);
 
--- Add trigger for updated_at
+-- Create the updated_at trigger function if it doesn't exist
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Idempotent trigger
+DROP TRIGGER IF EXISTS update_spark_leads_updated_at ON public.spark_leads;
 CREATE TRIGGER update_spark_leads_updated_at
   BEFORE UPDATE ON public.spark_leads
   FOR EACH ROW

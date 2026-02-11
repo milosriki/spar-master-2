@@ -8,6 +8,8 @@ import { Send, Bot, User, Zap, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIMessage, MicroWin } from '@/types/gamification';
 import { MicroWinCard } from './MicroWinCard';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface AIChatProps {
   messages: AIMessage[];
@@ -18,25 +20,96 @@ interface AIChatProps {
 }
 
 export const AIChat: React.FC<AIChatProps> = ({
-  messages,
+  messages: propMessages,
   onSendMessage,
   onMicroWinComplete,
-  isLoading = false,
+  isLoading: propIsLoading = false,
   className
 }) => {
   const [inputValue, setInputValue] = useState('');
+  const [history, setHistory] = useState<AIMessage[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Combine prop messages (new ones) with history
+  // In a real app, parent should probably manage all this, but we'll merge here for now
+  const allMessages = [...history, ...propMessages];
+
+  // Load chat history on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setIsLoadingHistory(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('chat_history')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: true })
+        .limit(50);
+
+      if (error) {
+        console.error('Error loading chat history:', error);
+      } else if (data) {
+        const historyMessages: AIMessage[] = data.map(msg => ({
+          id: msg.id,
+          text: msg.content,
+          sender: msg.role === 'assistant' ? 'ai' : 'user',
+          timestamp: new Date(msg.created_at)
+        }));
+        setHistory(historyMessages);
+      }
+      setIsLoadingHistory(false);
+    };
+
+    loadHistory();
+  }, []);
+
+  // Save NEW messages to DB (propMessages changes)
+  useEffect(() => {
+    const saveLastMessage = async () => {
+      const lastMsg = propMessages[propMessages.length - 1];
+      if (!lastMsg) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Check if we already saved this ID to avoid dupes (simple check)
+      const isAlreadyInHistory = history.some(h => h.id === lastMsg.id);
+      if (isAlreadyInHistory) return;
+
+      const role = lastMsg.sender === 'ai' ? 'assistant' : 'user';
+
+      const { error } = await supabase
+        .from('chat_history')
+        .insert({
+          user_id: session.user.id,
+          role,
+          content: lastMsg.text,
+          metadata: { xpEarned: lastMsg.xpEarned }
+        });
+
+      if (error) {
+        console.error('Error saving chat:', error);
+      }
+    };
+
+    saveLastMessage();
+  }, [propMessages, history]);
+
+  // Auto-scroll to bottom
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [allMessages, isLoadingHistory, propIsLoading]);
 
   const handleSend = () => {
-    if (inputValue.trim() && !isLoading) {
+    if (inputValue.trim() && !propIsLoading) {
       onSendMessage(inputValue.trim());
       setInputValue('');
       inputRef.current?.focus();
@@ -69,8 +142,12 @@ export const AIChat: React.FC<AIChatProps> = ({
         {/* Messages Area */}
         <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
           <div className="space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center py-8 space-y-3">
+            {isLoadingHistory ? (
+              <div className="text-center text-sm text-muted-foreground py-4">
+                Decrypting secure history...
+              </div>
+            ) : allMessages.length === 0 ? (
+               <div className="text-center py-8 space-y-3">
                 <Bot className="h-12 w-12 text-primary mx-auto" />
                 <div>
                   <h3 className="font-semibold text-foreground">Ready to elevate your energy?</h3>
@@ -96,10 +173,9 @@ export const AIChat: React.FC<AIChatProps> = ({
                   ))}
                 </div>
               </div>
-            )}
-
-            {messages.map((message) => (
-              <div key={message.id} className="space-y-3">
+            ) : (
+                allMessages.map((message) => (
+              <div key={message.id || Math.random()} className="space-y-3">
                 {/* Message Bubble */}
                 <div className={cn(
                   'flex gap-3',
@@ -147,10 +223,10 @@ export const AIChat: React.FC<AIChatProps> = ({
                   />
                 )}
               </div>
-            ))}
+            )))}
 
             {/* Loading indicator */}
-            {isLoading && (
+            {propIsLoading && (
               <div className="flex gap-3">
                 <Avatar className="h-8 w-8 bg-gradient-primary">
                   <AvatarFallback>
@@ -180,16 +256,16 @@ export const AIChat: React.FC<AIChatProps> = ({
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Ask your AI coach anything..."
-            disabled={isLoading}
+            disabled={propIsLoading}
             className="flex-1"
           />
           <Button 
             onClick={handleSend}
-            disabled={!inputValue.trim() || isLoading}
+            disabled={!inputValue.trim() || propIsLoading}
             size="icon"
             className="shrink-0"
           >
-            {isLoading ? (
+            {propIsLoading ? (
               <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
             ) : (
               <Send className="h-4 w-4" />

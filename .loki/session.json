@@ -1,0 +1,12 @@
+{
+  "pid": null,
+  "startedAt": "2026-02-11T15:10:57Z",
+  "provider": "gemini",
+  "invokedVia": "skill",
+  "status": "running",
+  "skillVersion": "v5.32.2",
+  "skillPath": "~/.claude/skills/loki-mode/SKILL.md",
+  "project": "spar-master-2",
+  "currentPhase": "GROWTH",
+  "complexity": "standard"
+}

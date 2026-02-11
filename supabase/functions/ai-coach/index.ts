@@ -570,6 +570,46 @@ function isTooSimilar(newResponse: string, conversationHistory: ConversationTurn
   return false;
 }
 
+// ─── Server-Side Rate Limiting (Tamper-Proof) ────────────────────────
+
+const MAX_FREE_MESSAGES_PER_DAY = 3;
+
+async function checkServerSideRateLimit(
+  supabaseClient: ReturnType<typeof createClient>,
+  userId: string | null,
+): Promise<{ allowed: boolean; count: number }> {
+  if (!userId) {
+    // Anonymous users get rate limited by IP in the future; for now allow
+    return { allowed: true, count: 0 };
+  }
+
+  try {
+    // Count today's messages from ai_metrics table (server-side truth)
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const { count, error } = await supabaseClient
+      .from('ai_metrics')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', todayStart.toISOString());
+
+    if (error) {
+      console.error('Rate limit check error (allowing):', error);
+      return { allowed: true, count: 0 };
+    }
+
+    const messageCount = count || 0;
+    return {
+      allowed: messageCount < MAX_FREE_MESSAGES_PER_DAY,
+      count: messageCount,
+    };
+  } catch (e) {
+    console.error('Rate limit exception (allowing):', e);
+    return { allowed: true, count: 0 };
+  }
+}
+
 // ─── P2: Metrics Persistence ─────────────────────────────────────────
 
 async function saveMetrics(
@@ -699,6 +739,18 @@ Deno.serve(async (req: Request) => {
             JSON.stringify({ error: "Missing 'message' for chat" }),
             {
               status: 400,
+              headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        // ─── Server-Side Rate Limiting (tamper-proof) ───
+        const rateLimit = await checkServerSideRateLimit(supabaseAdmin, userId);
+        if (!rateLimit.allowed) {
+          console.log(`Rate limited: user ${userId?.substring(0, 8)}... has ${rateLimit.count} messages today`);
+          return new Response(
+            JSON.stringify({ data: '__PAYWALL__', rateLimited: true, count: rateLimit.count }),
+            {
               headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
             }
           );

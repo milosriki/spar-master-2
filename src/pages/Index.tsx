@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,8 @@ import { ProgressRoadmap } from '@/components/progress/ProgressRoadmap';
 import AnimatedLayout, { AnimatedItem } from '@/components/ui/AnimatedLayout';
 import ParticleExplosion from '@/components/effects/ParticleExplosion';
 import FloatingReward, { useFloatingRewards } from '@/components/effects/FloatingReward';
-import HeroScene3D from '@/components/3d/HeroScene3D';
+// 3D Scene (lazy-loaded for code-splitting -- splits Three.js/R3F into separate chunk)
+const HeroScene3D = lazy(() => import('@/components/3d/HeroScene3D'));
 
 // Hooks
 import { useGameState } from '@/hooks/useGameState';
@@ -52,6 +53,7 @@ import { ChallengeService } from '@/services/challengeService';
 import { LeaderboardService } from '@/services/leaderboardService';
 import { LeadCaptureForm } from '@/components/booking/LeadCaptureForm';
 import { AICoachService, AIHabitPlan } from '@/services/AICoachService';
+import { analytics } from '@/services/AnalyticsService';
 
 const Index = () => {
   const { 
@@ -109,10 +111,16 @@ const Index = () => {
     fetchLeaderboard();
   }, [gameState.totalXP, gameState.level, gameState.currentStreak]);
 
+  // Track app open
+  useEffect(() => {
+    analytics.track('app_open');
+  }, []);
+
 
   // Real AI response using Gemini — with multi-turn context, habits, and time awareness
   const handleSendMessage = async (message: string) => {
     setIsLoading(true);
+    analytics.track('ai_message_sent');
     const userMessage: AIMessage = {
       id: Date.now().toString(),
       text: message,
@@ -142,6 +150,7 @@ const Index = () => {
       // Check for paywall signal
       if (responseText === '__PAYWALL__') {
         setShowPaywall(true);
+        analytics.track('paywall_shown', { trigger: 'message_limit' });
         // Remove the user message we just added since there's no AI response
         setChatMessages(prev => prev.filter(m => m.id !== userMessage.id));
         return;
@@ -155,6 +164,7 @@ const Index = () => {
         xpEarned: 10,
       };
       setChatMessages(prev => [...prev, aiMessage]);
+      analytics.track('ai_message_received');
     } catch (error) {
       console.error("Failed to get response", error);
     } finally {
@@ -220,6 +230,8 @@ const Index = () => {
         xpEarnedToday: prev.xpEarnedToday + habit.xpReward,
       };
     });
+
+    analytics.track('habit_complete', { type: habit.type, xp: habit.xpReward });
   }, [addXP, addGold, spawnReward]);
 
   const handleHabitMissed = useCallback((habit: Habit) => {
@@ -388,7 +400,9 @@ const Index = () => {
   if (!hasOnboarded) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-        <HeroScene3D />
+        <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-background to-background/80" />}>
+          <HeroScene3D />
+        </Suspense>
         <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-0" />
         
         <Card className="w-full max-w-md z-10 glass-card border-primary/20 shadow-2xl animate-fade-in-up">
@@ -416,7 +430,9 @@ const Index = () => {
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* 3D Background */}
-      <HeroScene3D />
+      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-background to-background/80" />}>
+        <HeroScene3D />
+      </Suspense>
 
       {/* Particle Effects Overlay */}
       <ParticleExplosion
@@ -741,7 +757,10 @@ const Index = () => {
       {/* Paywall Modal */}
       <PaywallModal
         isOpen={showPaywall}
-        onClose={() => setShowPaywall(false)}
+        onClose={() => {
+          setShowPaywall(false);
+          analytics.track('paywall_dismissed');
+        }}
         messagesUsed={getAIMessageCount()}
         maxFreeMessages={getMaxFreeMessages()}
       />

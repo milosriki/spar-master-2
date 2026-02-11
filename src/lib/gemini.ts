@@ -60,6 +60,9 @@ export function buildConversationHistory(messages: AIMessage[], maxTurns = 8): C
 }
 
 // ── AI Message Counting (Paywall) ────────────────────────────────────
+// Defense-in-depth: client-side check gives instant UX feedback,
+// but the REAL enforcement is server-side in the Edge Function.
+// If a user clears localStorage, the server still blocks them.
 
 const MAX_FREE_MESSAGES = 3;
 const PAYWALL_COOLDOWN_DAYS = 3;

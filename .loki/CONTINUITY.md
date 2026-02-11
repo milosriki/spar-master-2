@@ -72,7 +72,11 @@ Both projects belong to: `team_k2pQynzJNHrOBWbIDzK5NX4U`
 ---
 
 ## Current Task
-Phase 7D — Architecture documentation (HubSpot CRM sync + Typeform quiz integration).
+Phase 10+ — Future phases (Onboarding, Push Notifications, Viral Growth). All core features shipped.
+
+## Latest Git Commit
+`10ff7d5` — `feat: Phase 7+8 — Sales intelligence, paywall, HP damage system` (57 files, +5754/-966)
+Branch: `feat/ai-habit-coach` → `origin/feat/ai-habit-coach`
 
 ## Mistakes & Learnings
 - **Mistake**: Refactored Challenge System without sufficient discovery.
@@ -83,6 +87,8 @@ Phase 7D — Architecture documentation (HubSpot CRM sync + Typeform quiz integr
 - **Fixed**: All migrations made idempotent (safe to re-run via `supabase db push`).
 - **Fixed**: Supabase CLI found at `/opt/homebrew/bin/supabase`, PATH was missing.
 - **Learning (Phase 7C)**: Paywall cooldown pattern — 3-day dismiss cooldown prevents user fatigue without losing conversion opportunity.
+- **Learning (Phase 8)**: HP death penalty (10% gold loss) creates loss-aversion urgency loop. Users complete habits to avoid losing gold — behavioral nudge stronger than positive rewards.
+- **Learning (Loki Mode)**: Local SKILL.md at `~/.agent/skills/antigravity-awesome-skills/skills/loki-mode/SKILL.md` — always use this path.
 
 ## Completed Phases
 - [x] P0: Multi-Turn Context + Dynamic Prompt
@@ -93,4 +99,7 @@ Phase 7D — Architecture documentation (HubSpot CRM sync + Typeform quiz integr
 - [x] Phase 7A: Covert Booking Nudges (4 triggers + sales intelligence rules in Edge Function)
 - [x] Phase 7B: Multi-Signal Booking Readiness Score (getBookingReadiness → 7 signals → 4 nudge types)
 - [x] Phase 7C: AI Message Paywall (3/day free, PaywallModal, 3-day cooldown)
+- [x] Phase 7D: Future Architecture Docs (HubSpot CRM + Typeform quiz)
+- [x] Phase 8: HP Damage System + Booking Context Enrichment + Game State Helpers
+- [x] Phase 9: Git commit + push (`10ff7d5` → origin/feat/ai-habit-coach)
 

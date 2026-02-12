@@ -71,7 +71,7 @@ const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({
           gap: '12px',
           marginBottom: '8px',
         }}>
-          <Swords style={{ width: '28px', height: '28px', color: '#a78bfa' }} />
+          <Zap style={{ width: '28px', height: '28px', color: '#a78bfa' }} />
           <span style={{
             fontSize: '22px',
             fontWeight: 700,

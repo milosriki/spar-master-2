@@ -19,7 +19,12 @@ export type FunnelStage =
   | 'shop_open'
   | 'shop_purchase'
   | 'level_up'
-  | 'streak_milestone';
+  | 'streak_milestone'
+  | 'referral_code_generated'
+  | 'referral_captured'
+  | 'referral_shared'
+  | 'notification_permission_granted'
+  | 'notification_permission_denied';
 
 export interface AnalyticsEvent {
   event: FunnelStage;
@@ -59,8 +64,7 @@ class AnalyticsService {
   }
 
   /**
-   * Flush all queued events to Supabase ai_metrics table.
-   * Uses the existing table with event data stored in a JSONB-compatible format.
+   * Flush all queued events to Supabase analytics_events table.
    */
   async flush(): Promise<void> {
     if (this.flushTimer) {
@@ -84,37 +88,20 @@ class AnalyticsService {
       const existing = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
       for (const evt of events) {
-        // Increment event counters in localStorage
         existing[evt.event] = (existing[evt.event] || 0) + 1;
       }
       localStorage.setItem(storageKey, JSON.stringify(existing));
 
-      // Batch insert to Supabase (fire-and-forget, non-blocking)
+      // Batch insert to Supabase analytics_events table
       if (userId) {
-        const rows = events.map(evt => ({
-          user_id: userId,
-          latency_ms: 0, // not applicable for analytics events
-          model: 'analytics',
-          fallback_used: false,
-          memory_count: 0,
-          conversation_length: 0,
-          // Store event data in existing columns creatively:
-          // model column = 'analytics:event_name' to distinguish from AI metrics
-        }));
-
-        // Use a single upsert for efficiency
-        // We encode event type in model field: "analytics:habit_complete"
         const analyticsRows = events.map(evt => ({
           user_id: userId,
-          latency_ms: 0,
-          model: `analytics:${evt.event}`,
-          fallback_used: false,
-          memory_count: Object.keys(evt.properties || {}).length,
-          conversation_length: 0,
+          event_name: evt.event,
+          properties: evt.properties || {},
         }));
 
         await supabase
-          .from('ai_metrics')
+          .from('analytics_events')
           .insert(analyticsRows as never[])
           .then(() => {})
           .catch(e => console.error('Analytics flush error (non-fatal):', e));

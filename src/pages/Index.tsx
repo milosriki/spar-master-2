@@ -17,6 +17,15 @@ import {
   Map,
   CheckSquare,
   Share2,
+  CalendarDays,
+  Bell,
+  BellOff,
+  User,
+  Download,
+  RotateCcw,
+  Info,
+  Clock,
+  Save,
 } from 'lucide-react';
 
 // Components
@@ -48,6 +57,7 @@ import { AIMessage, Challenge, MicroWin, InventoryItem, Reward, LeaderboardEntry
 import { Habit, HabitStats } from '@/types/habits';
 import { sendMessageToGemini, buildTimeContext, buildConversationHistory, getAIMessageCount, getMaxFreeMessages } from '@/lib/gemini';
 import { PaywallModal } from '@/components/PaywallModal';
+import { BookingModal } from '@/components/booking/BookingModal';
 
 // Mock data
 import { ChallengeService } from '@/services/challengeService';
@@ -102,6 +112,7 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [isBookingOpen, setIsBookingOpen] = useState(false);
 
   // Load Leaderboard Data
   useEffect(() => {
@@ -248,6 +259,9 @@ const Index = () => {
     });
 
     analytics.track('habit_complete', { type: habit.type, xp: habit.xpReward });
+
+    // Send completion notification
+    NotificationService.notifyHabitComplete(habit.title, habit.xpReward);
 
     // Prompt for notifications after first habit (optimal engagement moment)
     const totalCompleted = habitStats.habitsCompletedToday + habitStats.dailiesCompletedToday + habitStats.todosCompletedToday;
@@ -410,7 +424,7 @@ const Index = () => {
 
         setChatMessages(prev => [{
           id: 'booking-invite',
-          text: nudgeMessages[readiness.nudgeType] || nudgeMessages.soft,
+          text: (nudgeMessages[readiness.nudgeType] || nudgeMessages.soft) + '\n\n👉 Tap "Book a Session" below to schedule your free consultation.',
           sender: 'ai',
           timestamp: new Date(),
           xpEarned: 0
@@ -613,6 +627,10 @@ const Index = () => {
                             <Target className="h-4 w-4" />
                             Daily Check-In
                           </Button>
+                          <Button variant="outline" className="w-full justify-start gap-2 btn-ghost-glass rounded-lg cursor-pointer" onClick={() => { setIsBookingOpen(true); analytics.track('booking_modal_open'); }}>
+                            <CalendarDays className="h-4 w-4" />
+                            Book a Session
+                          </Button>
                           <Button variant="outline" className="w-full justify-start gap-2 btn-ghost-glass rounded-lg cursor-pointer" onClick={() => setSelectedTab('challenges')}>
                             <Target className="h-4 w-4" />
                             View Challenges
@@ -771,19 +789,206 @@ const Index = () => {
             {/* Settings Tab */}
             <TabsContent value="settings" className="space-y-6">
               <AnimatedLayout id="settings">
-                <AnimatedItem>
-                  <Card className="glass-card border-0">
-                    <CardHeader>
-                      <CardTitle className="font-heading">Coming Soon</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-muted-foreground">
-                        Settings panel will include profile customization, notification preferences, 
-                        and subscription management.
-                      </p>
-                    </CardContent>
-                  </Card>
-                </AnimatedItem>
+                <div className="grid lg:grid-cols-2 gap-6">
+                  {/* Profile Settings */}
+                  <AnimatedItem>
+                    <Card className="glass-card border-0">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 font-heading">
+                          <User className="h-5 w-5 text-primary" />
+                          Profile
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Display Name</label>
+                          <input
+                            type="text"
+                            defaultValue={localStorage.getItem('spark_player_name') || 'Warrior'}
+                            className="w-full rounded-lg bg-background/50 border border-border/50 px-3 py-2 text-sm text-foreground"
+                            onBlur={(e) => {
+                              const name = e.target.value.trim();
+                              if (name) {
+                                // playerName is stored in localStorage for now
+                                localStorage.setItem('spark_player_name', name);
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground">Character Class</label>
+                          <select
+                            defaultValue={gameState.characterClass || 'novice'}
+                            className="w-full rounded-lg bg-background/50 border border-border/50 px-3 py-2 text-sm text-foreground"
+                            onChange={(e) => {
+                              // Store preference locally; synced on next profile load
+                              localStorage.setItem('spark_character_class', e.target.value);
+                            }}
+                          >
+                            <option value="novice">Novice</option>
+                            <option value="warrior">Warrior</option>
+                            <option value="mage">Mage</option>
+                            <option value="healer">Healer</option>
+                            <option value="rogue">Rogue</option>
+                          </select>
+                        </div>
+                        <div className="pt-2 grid grid-cols-2 gap-3 text-sm">
+                          <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                            <div className="text-muted-foreground">Level</div>
+                            <div className="text-lg font-bold text-foreground">{gameState.level}</div>
+                          </div>
+                          <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                            <div className="text-muted-foreground">Total XP</div>
+                            <div className="text-lg font-bold text-foreground">{gameState.totalXP.toLocaleString()}</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </AnimatedItem>
+
+                  {/* Notification Settings */}
+                  <AnimatedItem>
+                    <Card className="glass-card border-0">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 font-heading">
+                          <Bell className="h-5 w-5 text-primary" />
+                          Notifications
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-medium text-foreground">Push Notifications</div>
+                            <div className="text-xs text-muted-foreground">Streak reminders & habit nudges</div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={async () => {
+                              const granted = await NotificationService.requestPermission();
+                              if (granted) {
+                                NotificationService.scheduleStreakReminder(gameState.currentStreak);
+                              }
+                            }}
+                          >
+                            {NotificationService.getPermission() === 'granted' ? (
+                              <><Bell className="h-3.5 w-3.5" /> Enabled</>
+                            ) : (
+                              <><BellOff className="h-3.5 w-3.5" /> Enable</>
+                            )}
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm text-muted-foreground flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5" /> Reminder Time
+                          </label>
+                          <select
+                            defaultValue={localStorage.getItem('spark_notification_time') || '20'}
+                            className="w-full rounded-lg bg-background/50 border border-border/50 px-3 py-2 text-sm text-foreground"
+                            onChange={(e) => {
+                              localStorage.setItem('spark_notification_time', e.target.value);
+                              if (NotificationService.getPermission() === 'granted') {
+                                NotificationService.scheduleStreakReminder(gameState.currentStreak);
+                              }
+                            }}
+                          >
+                            <option value="8">8:00 AM</option>
+                            <option value="9">9:00 AM</option>
+                            <option value="12">12:00 PM</option>
+                            <option value="18">6:00 PM</option>
+                            <option value="20">8:00 PM</option>
+                            <option value="21">9:00 PM</option>
+                          </select>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </AnimatedItem>
+
+                  {/* Data & Export */}
+                  <AnimatedItem>
+                    <Card className="glass-card border-0">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 font-heading">
+                          <Download className="h-5 w-5 text-primary" />
+                          Data
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start gap-2 btn-ghost-glass"
+                          onClick={() => {
+                            const exportData = {
+                              gameState: {
+                                level: gameState.level,
+                                totalXP: gameState.totalXP,
+                                currentStreak: gameState.currentStreak,
+                                bestStreak: gameState.bestStreak,
+                                gold: gameState.gold,
+                                gems: gameState.gems,
+                                characterClass: gameState.characterClass,
+                              },
+                              habits: aiHabits,
+                              exportedAt: new Date().toISOString(),
+                            };
+                            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `spark-mastery-export-${new Date().toISOString().split('T')[0]}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                        >
+                          <Save className="h-4 w-4" />
+                          Export Progress
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start gap-2 text-destructive hover:text-destructive btn-ghost-glass"
+                          onClick={() => {
+                            if (window.confirm('Reset all game progress? This cannot be undone.')) {
+                              localStorage.removeItem('spark_onboarded');
+                              localStorage.removeItem('spark_ai_habits');
+                              localStorage.removeItem('spark_player_name');
+                              window.location.reload();
+                            }
+                          }}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Reset Progress
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </AnimatedItem>
+
+                  {/* About */}
+                  <AnimatedItem>
+                    <Card className="glass-card border-0">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 font-heading">
+                          <Info className="h-5 w-5 text-primary" />
+                          About
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Version</span>
+                          <span className="text-foreground font-medium">1.0.0</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>AI Model</span>
+                          <span className="text-foreground font-medium">Gemini 2.0 Flash</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Streak</span>
+                          <span className="text-foreground font-medium">{gameState.currentStreak} days</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </AnimatedItem>
+                </div>
               </AnimatedLayout>
             </TabsContent>
           </Tabs>
@@ -795,9 +1000,28 @@ const Index = () => {
         onClose={() => {
           setShowPaywall(false);
           analytics.track('paywall_dismissed');
+          try {
+            ReferralService.captureReferral();
+          } catch (error) {
+            console.error('Referral capture failed:', error);
+          }
+          NotificationService.registerServiceWorker();
         }}
         messagesUsed={getAIMessageCount()}
         maxFreeMessages={getMaxFreeMessages()}
+      />
+
+      {/* Booking Modal */}
+      <BookingModal
+        isOpen={isBookingOpen}
+        onClose={() => {
+          setIsBookingOpen(false);
+          analytics.track('booking_complete');
+        }}
+        prefillData={{
+          name: localStorage.getItem('spark_player_name') || undefined,
+          goal: aiHabits?.[0]?.title,
+        }}
       />
 
       {/* Hidden share card for html2canvas capture */}

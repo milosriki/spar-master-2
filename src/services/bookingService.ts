@@ -1,6 +1,12 @@
 // Spark Mastery — Booking Service
 // Deterministic slot generation with business hours (fixes PR #3 random slot bug)
 
+import { supabase } from '@/integrations/supabase/client';
+
+// Helper for tables not yet in generated Supabase types (bookings is in migration 006)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fromTable = (table: string) => (supabase as unknown as { from: (t: string) => any }).from(table);
+
 export interface BookingSlot {
   date: string;       // ISO date string
   time: string;       // "HH:MM" format
@@ -28,7 +34,6 @@ export interface BookingResult {
 }
 
 const BUSINESS_HOURS = { start: 9, end: 18 }; // 9AM–6PM GST
-const SLOT_DURATION = 60; // minutes
 const DAYS_AHEAD = 7;
 
 // External booking URL
@@ -79,27 +84,51 @@ export const getAvailableSlots = (): BookingSlot[] => {
 
 /**
  * Create a booking.
- * In production: saves to Supabase, sends confirmation email, syncs with Cal.com.
- * Current: saves to localStorage + redirects to external booking URL.
+ * Saves to Supabase bookings table with localStorage fallback.
  */
 export const createBooking = async (booking: BookingRequest): Promise<BookingResult> => {
   try {
-    // Save booking data locally (will be replaced with Supabase)
-    const existingBookings = JSON.parse(localStorage.getItem('sparkBookings') || '[]');
-    const newBooking = {
-      ...booking,
-      id: `booking_${Date.now()}`,
-      createdAt: new Date().toISOString(),
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const bookingRow = {
+      user_id: user?.id || null,
+      name: booking.name,
+      email: booking.email,
+      phone: booking.phone || null,
+      date: booking.date,
+      time: booking.time,
+      session_type: booking.sessionType,
+      notes: booking.notes || null,
+      source: booking.source || 'spark_mastery',
       status: 'pending',
     };
-    existingBookings.push(newBooking);
-    localStorage.setItem('sparkBookings', JSON.stringify(existingBookings));
+
+    const { data, error } = await fromTable('bookings')
+      .insert(bookingRow)
+      .select('id')
+      .single();
+
+    if (error) {
+      console.warn('Supabase booking insert failed, falling back to localStorage:', error);
+      // Fallback to localStorage
+      const existingBookings = JSON.parse(localStorage.getItem('sparkBookings') || '[]');
+      const localBooking = { ...bookingRow, id: `booking_${Date.now()}`, created_at: new Date().toISOString() };
+      existingBookings.push(localBooking);
+      localStorage.setItem('sparkBookings', JSON.stringify(existingBookings));
+
+      return {
+        success: true,
+        message: 'Booking confirmed! Redirecting to scheduling...',
+        confirmationUrl: BOOKING_URL,
+        bookingId: localBooking.id,
+      };
+    }
 
     return {
       success: true,
       message: 'Booking confirmed! Redirecting to scheduling...',
       confirmationUrl: BOOKING_URL,
-      bookingId: newBooking.id,
+      bookingId: data?.id,
     };
   } catch (error) {
     console.error('Booking creation failed:', error);

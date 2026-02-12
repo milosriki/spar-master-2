@@ -11,7 +11,8 @@ interface CharacterStatsProps {
   gameState: GameState;
 }
 
-const CLASS_CONFIG: Record<CharacterClass, { label: string; color: string; icon: React.ReactNode }> = {
+const CLASS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  novice: { label: 'Novice', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', icon: <Shield className="w-3.5 h-3.5" /> },
   warrior: { label: 'Warrior', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: <Swords className="w-3.5 h-3.5" /> },
   mage: { label: 'Mage', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: <Sparkles className="w-3.5 h-3.5" /> },
   healer: { label: 'Healer', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: <Heart className="w-3.5 h-3.5" /> },
@@ -28,7 +29,7 @@ export const CharacterStats: React.FC<CharacterStatsProps> = ({ gameState }) => 
   const xpForLevel = Math.pow(level, 2) * 100;
   const currentLevelXP = totalXP - Math.pow(level - 1, 2) * 100;
   const xpPercentage = Math.min(100, (currentLevelXP / (xpForLevel - Math.pow(level - 1, 2) * 100)) * 100);
-  const classConfig = CLASS_CONFIG[characterClass];
+  const classConfig = CLASS_CONFIG[characterClass] || CLASS_CONFIG.novice;
 
   return (
     <motion.div
